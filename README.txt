@@ -21,9 +21,9 @@ Optional parameters:
 lambda(default: 0.1)  topic_proportion(default: 0.5)  number_of_topic(default: 10)  number_of_discourse(default: 10)  training_percentage(default: 0.75)  confidence_paramter(default: 200)  running_time(default: 0)
 
 For example:
-./train tweets_election.data
+./train test.data
 equals to 
-./train tweets_election.data 0.1 0.5 10 10 0.75 200 0
+./train test.data 0.1 0.5 10 10 0.75 200 0
 
 
 Result files:
