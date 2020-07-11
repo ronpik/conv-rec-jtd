@@ -301,7 +301,7 @@ public:
 
     // read conversation embeddings.
     igzstream in4;
-    in4.open("/home/ron/fast-data/trec11/trec_embedding.csv");
+    in4.open("./additional_data/trec_embedding.csv");
 
     // nConvs - number of conversations
     // read first line to get vector size
