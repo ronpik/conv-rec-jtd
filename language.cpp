@@ -380,7 +380,6 @@ void topicCorpus::normalizeWordWeights(void) {
 /// Derivative of the energy function, cost function is MSE
 void topicCorpus::dl(double *grad) {
     // double dlStart = clock_();
-    printf("weight example: %f\n", topo_user[0][0]);
 
     for (int w = 0; w < NW; w++)
         grad[w] = 0;

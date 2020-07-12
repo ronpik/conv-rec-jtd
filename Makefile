@@ -1,5 +1,5 @@
 CC = g++
-CFLAGS = -Wall -O3 -fopenmp -Iliblbfgs-1.10/include -Igzstream
+CFLAGS = -std=c++11 -Wall -O3 -fopenmp -Iliblbfgs-1.10/include -Igzstream
 LDFLAGS = -llbfgs -lgomp -lgzstream -lz -lstdc++ -Lliblbfgs-1.10/lib/.libs -Lgzstream
 
 all: train
