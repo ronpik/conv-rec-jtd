@@ -1,3 +1,8 @@
 
 .DS_Store
 */.DS_Store
+data/*
+liblbfgs-1.10/*
+gzstream/*
+train
+*.out

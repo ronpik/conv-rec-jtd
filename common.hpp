@@ -288,7 +288,7 @@ public:
     in2.close();
 
     igzstream in3;
-    in3.open("stopwords.txt");
+    in3.open("./additional_data/stopwords.txt");
     // Read stopwords file and store the stopwords in stopWords.
     while (std::getline(in3, line))
     {
