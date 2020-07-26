@@ -24,7 +24,7 @@ public:
               int c1,
               int c2) : 
     corp(corp), K(K), D(D), topicProportion(topicProportion), latentReg(latentReg), lambda(lambda), c1(c1), c2(c2)
-  {
+    {
     srand((unsigned)time(0));
     nUsers = corp->nUsers;
     nConvs = corp->nConvs;
@@ -35,6 +35,8 @@ public:
     trainVotes = corp->trainVotes;
     trainVotesPerUser = corp->trainVotesPerUser;
     trainVotesPerConv = corp->trainVotesPerConv;
+    conversationEmbeddings = corp -> convEmbeddings;
+    embeddingSize = corp -> embeddingSize;
 
     double testFraction = 0.1;
     testNovotesPerUser = new std::vector<int>[nUsers];
@@ -90,10 +92,15 @@ public:
         //else
           //confidence[(*it)->user][b] = c2;
       }
-  
-
-    // total number of parameters
-    NW = 1 + 2 + (K + D + 1) * nConvs + (K + D + 1) * nUsers + (K + D + 1) * nWords + D * 3;
+        // total number of parameters
+    NW =
+            1                           // model prior
+            + 2                         // user bias and conversation bias parameters
+            + ((K + D + 1) * nConvs)    // conversation relatedness to topics, dicourse modes and background
+            + ((K + D + 1) * nUsers)    // users preferences of topics, dicourse modes and background
+            + ((K + D + 1) * nWords)    // words relatedness to topics, discourse modes and background
+            + (D * 3)                   // discourse mode switcher parameters
+            + (corp->embeddingSize * corp->nUsers); // conversation structure preferences
 
     // Initialize parameters and latent variables
     // Zero all weights
@@ -101,7 +108,9 @@ public:
     bestW = new double [NW];
     for (int i = 0; i < NW; i++)
       W[i] = 0;
-    getG(W, &alpha, &kappa_disc, &kappa_topic, &beta_user, &beta_conv, &gamma_user, &gamma_conv, &delta_user, &delta_conv, &topicWords, &discourseWords, &backgroundWords, &typeSwitcher, true);
+    getG(W, &alpha, &kappa_disc, &kappa_topic, &beta_user, &beta_conv, &gamma_user, &gamma_conv,
+            &delta_user, &delta_conv, &topo_user, &topicWords, &discourseWords, &backgroundWords, &typeSwitcher,
+            true);
 
     // Set alpha to the average
     int trainsize = (int) trainVotes.size();
@@ -174,12 +183,11 @@ public:
 
     convTopicCounts = new int*[nConvs];
     convTopicSums = new long long[nConvs];
-    for (int b = 0; b < nConvs; b ++)
-    {
-      convTopicSums[b] = 0;
-      convTopicCounts[b] = new int[K];
-      for (int k = 0; k < K; k ++)
-        convTopicCounts[b][k] = 0;
+    for (int b = 0; b < nConvs; b ++) {
+        convTopicSums[b] = 0;
+        convTopicCounts[b] = new int[K];
+        for (int k = 0; k < K; k++)
+            convTopicCounts[b][k] = 0;
     }
 
     userDiscourseCounts = new int*[nUsers];
@@ -280,6 +288,8 @@ public:
           gamma_user[u][k] = rand() * 1.0 / RAND_MAX;
         for (int d = 0; d < D; d++)
           delta_user[u][d] = rand() * 1.0 / RAND_MAX;
+        for (int i = 0; i < embeddingSize; i++)
+            topo_user[u][i] = rand() * 1.0 / RAND_MAX;
       }
       for (int b = 0; b < nConvs; b++)
       {
@@ -305,7 +315,7 @@ public:
 
     *kappa_disc = 1.0;
     *kappa_topic = 1.0;
-  }
+    }
 
   ~topicCorpus()
   {
@@ -346,7 +356,7 @@ public:
     for (std::vector<vote*>::iterator vi = trainVotes.begin(); vi != trainVotes.end(); vi++)
       delete[] msgWordtypes[*vi];
 
-    clearG(&alpha, &kappa_disc, &kappa_topic, &beta_user, &beta_conv, &gamma_user, &gamma_conv, &delta_user, &delta_conv, &topicWords, &discourseWords, &backgroundWords, &typeSwitcher);
+    clearG(&alpha, &kappa_disc, &kappa_topic, &beta_user, &beta_conv, &gamma_user, &gamma_conv, &delta_user, &delta_conv, &topo_user, &topicWords, &discourseWords, &backgroundWords, &typeSwitcher);
     delete[] W;
   }
 
@@ -379,7 +389,10 @@ public:
   std::vector<int>* validNovotesPerUser; // Store the records that vote 0(Not replied) as valid set
   std::vector<int>* trainNovotesPerUser; // Store the records that vote 0(Not replied) as train set
   std::vector<int>* trainNovotesPerConv; // Store the records that vote 0(Not replied) as train set
-  int ** confidence; 
+  int ** confidence;
+
+  double** conversationEmbeddings; // stores the pre-calculated embedding of each conversation
+  int embeddingSize;
 
   int getG(double* g,
            double** alpha,
@@ -391,6 +404,7 @@ public:
            double*** gamma_conv,
            double*** delta_user,
            double*** delta_conv,
+           double*** topo_user,
            double*** topicWords,
            double*** discourseWords,
            double** backgroundWords,
@@ -405,6 +419,7 @@ public:
               double*** gamma_conv,
               double*** delta_user,
               double*** delta_conv,
+              double*** topo_user,
               double*** topicWords,
               double*** discourseWords,
               double** backgroundWords,
@@ -430,6 +445,7 @@ public:
   double** gamma_conv; // Item latent factors
   double** delta_user; // User latent discourse factors
   double** delta_conv; // Item latent discourse factors
+  double** topo_user; // user preferences for conversation topology
 
   double* W; // Contiguous version of all parameters, i.e., a flat vector containing all parameters in order (useful for lbfgs)
 
