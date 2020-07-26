@@ -421,6 +421,8 @@ public:
               double** backgroundWords,
               double*** typeSwitcher);
 
+  double *characterizeUserByConversations(int user) const;
+
   void wordtopicZ(double* res);
   void worddiscourseZ(double* res);
   void wordbackgroundZ(double& res);

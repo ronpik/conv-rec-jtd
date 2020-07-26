@@ -196,15 +196,39 @@ static int progress(void *instance,
   return 0;
 }
 
+double* topicCorpus::characterizeUserByConversations(int user) const {
+    double* user_convs_mean = new double[K];
+    for (int k = 0; k < K; k++) {
+        user_convs_mean[k] = 0;
+    }
+    for (int i = 0; i < (int) trainVotesPerUser[user].size(); i++) {
+        int convIndex = trainVotesPerUser[user][i] -> item;
+        double* convLatent = vConv[convIndex];
+        for (int k = 0; k < K; k++) {
+            user_convs_mean[k] += convLatent[k];
+        }
+    }
+    int numUserConversations = trainVotesPerUser[user].size();
+    for (int k = 0; k < K; k++) {
+        user_convs_mean[k] /= numUserConversations;
+    }
+    return user_convs_mean;
+}
+
 /// Predict a particular rating given the current parameter values
-double topicCorpus::prediction(int user, int conv)
-{
-  double res = *alpha + beta_user[user] + beta_conv[conv];
-  for (int k = 0; k < K; k++)
-    res += topicProportion * gamma_user[user][k] * gamma_conv[conv][k];
-  for (int d = 0; d < D; d++)
-    res += (1 - topicProportion) * delta_user[user][d] * delta_conv[conv][d];
-  return res;
+double topicCorpus::prediction(int user, int conv) {
+    double res = *alpha + beta_user[user] + beta_conv[conv];
+    double* user_convs_mean = characterizeUserByConversations(user);
+    double topicValue = 0;
+    for (int k = 0; k < K; k++) {
+        topicValue += gamma_conv[conv][k] * (gamma_user[user][k] + user_convs_mean[k]);
+    }
+    res += topicProportion * topicValue;
+    for (int d = 0; d < D; d++) {
+        res += (1 - topicProportion) * delta_user[user][d] * delta_conv[conv][d];
+    }
+
+    return res;
 }
 
 /// Compute normalization constant for a particular item
