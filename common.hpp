@@ -298,35 +298,8 @@ public:
     }
     in3.close();
     printf("\nStopwords: %d\n", (int) stopWords.size());
+    printf("\n");
 
-    // read conversation embeddings.
-    igzstream in4;
-    in4.open("/home/ron/fast-data/trec11/trec_embedding.csv");
-
-    // nConvs - number of conversations
-    // read first line to get vector size
-      std::getline(in4, line); // first line is the vector size of the embeddings
-      // trim line if needed https://stackoverflow.com/questions/216823/whats-the-best-way-to-trim-stdstring
-      embeddingSize = std::stoi(line);
-      double** embeddings { new double*[nConvs]{} };
-      convEmbeddings = embeddings;
-      // keep loading the file
-      line.clear();
-      while (std::getline(in4, line)) {
-          words.clear();
-          splitString(line, words, " ");
-          int convIndex = std::stoi(words[0]);
-          double* convEmbedding { new double[embeddingSize] };
-          for (int i = 0; i < embeddingSize; i++) {
-              convEmbedding[i] = std::stod(words[i + 1]);
-          }
-          convEmbeddings[convIndex] = convEmbedding;
-          line.clear();
-      }
-      in4.close();
-      printf("\nEmbedding Size: %d\n\n", embeddingSize);
-
-      // read each line get convName -> get the id from convId -> go to the corresponding index -> store vector elements one by one.
   }
 
   ~corpus()
@@ -355,9 +328,6 @@ public:
   std::map<std::string, int> wordId; // Map each word to its integer ID
   std::map<int, std::string> idWord; // Inverse of the above map
   std::vector<int> stopWords; // Store stopwords
-
-  int embeddingSize; // size of a conversation embedding vector
-  double** convEmbeddings; // Store conversation embeddings
 
   std::vector<vote*> trainVotes;
   std::vector<vote*> validVotes;
