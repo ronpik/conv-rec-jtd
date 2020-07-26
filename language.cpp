@@ -35,7 +35,8 @@ double clock_()
 */
 
 /// Recover all parameters from a vector (g)
-// W, &alpha, &kappa_disc, &kappa_topic, &beta_user, &beta_conv, &gamma_user, &gamma_conv, &delta_user, &delta_conv, &topicWords, &discourseWords, &backgroundWords, &typeSwitcher, true
+// W, &alpha, &kappa_disc, &kappa_topic, &beta_user, &beta_conv, &gamma_user, &gamma_conv, &vConv, &delta_user, &delta_conv, &topicWords, &discourseWords, &backgroundWords, &typeSwitcher, true
+
 int topicCorpus::getG(double* g,
                       double** alpha,
                       double** kappa_disc,
@@ -44,18 +45,20 @@ int topicCorpus::getG(double* g,
                       double** beta_conv,
                       double*** gamma_user,
                       double*** gamma_conv,
+                      double*** vConv,
                       double*** delta_user, 
                       double*** delta_conv,
                       double*** topicWords,
                       double*** discourseWords,
                       double** backgroundWords,
                       double*** typeSwitcher,
-                      bool init)
+                      bool init) const
 {
   if (init)
   {
     *gamma_user = new double*[nUsers];
     *gamma_conv = new double*[nConvs];
+    *vConv = new double*[nConvs];
     *delta_user = new double*[nUsers];
     *delta_conv = new double*[nConvs]; 
     *topicWords = new double*[nWords];
@@ -85,6 +88,10 @@ int topicCorpus::getG(double* g,
   {
     (*gamma_conv)[b] = g + ind;
     ind += K;
+  }
+  for (int b = 0; b < nConvs; b++) {
+      (*vConv)[b] = g + ind;
+      ind += K;
   }
   for (int u = 0; u < nUsers; u++)
   {
@@ -130,6 +137,7 @@ void topicCorpus::clearG(double** alpha,
                          double** beta_conv,
                          double*** gamma_user,
                          double*** gamma_conv,
+                         double*** vConv,
                          double*** delta_user,
                          double*** delta_conv,
                          double*** topicWords,
@@ -139,6 +147,7 @@ void topicCorpus::clearG(double** alpha,
 {
   delete[] (*gamma_user);
   delete[] (*gamma_conv);
+  delete[] (*vConv);
   delete[] (*delta_user);
   delete[] (*delta_conv);
   delete[] (*topicWords);
@@ -426,6 +435,7 @@ void topicCorpus::dl(double* grad)
   double* dbeta_conv;
   double** dgamma_user;
   double** dgamma_conv;
+  double** dvConv;
   double** ddelta_user;
   double** ddelta_conv;
   double** dtopicWords;
@@ -433,7 +443,7 @@ void topicCorpus::dl(double* grad)
   double* dbackgroundWords;
   double** dtypeSwitcher;
 
-  getG(grad, &(dalpha), &(dkappa_disc), &(dkappa_topic), &(dbeta_user), &(dbeta_conv), &(dgamma_user), &(dgamma_conv), &(ddelta_user), &(ddelta_conv), &(dtopicWords), &(ddiscourseWords), &(dbackgroundWords), &(dtypeSwitcher), true);
+  getG(grad, &(dalpha), &(dkappa_disc), &(dkappa_topic), &(dbeta_user), &(dbeta_conv), &(dgamma_user), &(dgamma_conv), &(dvConv), &(ddelta_user), &(ddelta_conv), &(dtopicWords), &(ddiscourseWords), &(dbackgroundWords), &(dtypeSwitcher), true);
 
   double da = 0;
   #pragma omp parallel for reduction(+:da)
@@ -604,7 +614,7 @@ void topicCorpus::dl(double* grad)
     }
   }
 
-  clearG(&(dalpha), &(dkappa_disc), &(dkappa_topic), &(dbeta_user), &(dbeta_conv), &(dgamma_user), &(dgamma_conv), &(ddelta_user), &(ddelta_conv), &(dtopicWords), &(ddiscourseWords), &(dbackgroundWords), &(dtypeSwitcher));
+  clearG(&(dalpha), &(dkappa_disc), &(dkappa_topic), &(dbeta_user), &(dbeta_conv), &(dgamma_user), &(dgamma_conv), &(dvConv), &(ddelta_user), &(ddelta_conv), &(dtopicWords), &(ddiscourseWords), &(dbackgroundWords), &(dtypeSwitcher));
 }
 
 /// Compute the energy according to the least-squares criterion, cost function is MSE
@@ -958,7 +968,7 @@ void topicCorpus::topWords()
 void topicCorpus::save(std::string modelPath, std::string resultPath, std::string scorePath)
 {
   FILE* f;
-  getG(bestW, &(alpha), &(kappa_disc), &(kappa_topic), &(beta_user), &(beta_conv), &(gamma_user), &(gamma_conv), &(delta_user), &(delta_conv), &(topicWords), &(discourseWords), &(backgroundWords), &(typeSwitcher), false);
+  getG(bestW, &(alpha), &(kappa_disc), &(kappa_topic), &(beta_user), &(beta_conv), &(gamma_user), &(gamma_conv), &(vConv), &(delta_user), &(delta_conv), &(topicWords), &(discourseWords), &(backgroundWords), &(typeSwitcher), false);
   if (lambda > 0)
   {
     f = fopen_(modelPath.c_str(), "w");

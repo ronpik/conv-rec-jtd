@@ -82,18 +82,25 @@ public:
     for (int i = 0; i < nUsers; i++)
         for (int j = 0; j < nConvs; j++)
             confidence[i][j] = 1;
-    for (int b = 0; b < nConvs; b++)
-      for (vector<vote*>::iterator it = trainVotesPerConv[b].begin(); it != trainVotesPerConv[b].end(); it ++)
-      {
-        //if (it + 1 == trainVotesPerConv[b].end())
-          confidence[(*it)->user][b] = c1;
-        //else
-          //confidence[(*it)->user][b] = c2;
-      }
-  
+    for (int b = 0; b < nConvs; b++) {
+        for (vector<vote *>::iterator it = trainVotesPerConv[b].begin(); it != trainVotesPerConv[b].end(); it++) {
+            //if (it + 1 == trainVotesPerConv[b].end())
+            confidence[(*it)->user][b] = c1;
+            //else
+            //confidence[(*it)->user][b] = c2;
+        }
+    }
 
     // total number of parameters
-    NW = 1 + 2 + (K + D + 1) * nConvs + (K + D + 1) * nUsers + (K + D + 1) * nWords + D * 3;
+    NW =
+            1                           // model prior
+            + 2                         // user bias and conversation bias parameters
+            + ((K + D + 1) * nConvs)    // conversation relatedness to topics, dicourse modes and background
+            + ((K + D + 1) * nUsers)    // users preferences of topics, dicourse modes and background
+            + ((K + D + 1) * nWords)    // words relatedness to topics, discourse modes and background
+            + (D * 3)                   // discourse mode switcher parameters
+            + (K * nConvs)              // conversations-based users characterization
+            ;
 
     // Initialize parameters and latent variables
     // Zero all weights
@@ -101,7 +108,7 @@ public:
     bestW = new double [NW];
     for (int i = 0; i < NW; i++)
       W[i] = 0;
-    getG(W, &alpha, &kappa_disc, &kappa_topic, &beta_user, &beta_conv, &gamma_user, &gamma_conv, &delta_user, &delta_conv, &topicWords, &discourseWords, &backgroundWords, &typeSwitcher, true);
+    getG(W, &alpha, &kappa_disc, &kappa_topic, &beta_user, &beta_conv, &gamma_user, &gamma_conv, &vConv, &delta_user, &delta_conv, &topicWords, &discourseWords, &backgroundWords, &typeSwitcher, true);
 
     // Set alpha to the average
     int trainsize = (int) trainVotes.size();
@@ -283,8 +290,10 @@ public:
       }
       for (int b = 0; b < nConvs; b++)
       {
-        for (int k = 0; k < K; k++)
-          gamma_conv[b][k] = rand() * 1.0 / RAND_MAX;
+        for (int k = 0; k < K; k++) {
+            gamma_conv[b][k] = rand() * 1.0 / RAND_MAX;
+            vConv[b][k] = rand() * 1.0 / RAND_MAX;
+        }
         for (int d = 0; d < D; d++)
           delta_conv[b][d] = rand() * 1.0 / RAND_MAX;
       }
@@ -346,7 +355,7 @@ public:
     for (std::vector<vote*>::iterator vi = trainVotes.begin(); vi != trainVotes.end(); vi++)
       delete[] msgWordtypes[*vi];
 
-    clearG(&alpha, &kappa_disc, &kappa_topic, &beta_user, &beta_conv, &gamma_user, &gamma_conv, &delta_user, &delta_conv, &topicWords, &discourseWords, &backgroundWords, &typeSwitcher);
+    clearG(&alpha, &kappa_disc, &kappa_topic, &beta_user, &beta_conv, &gamma_user, &gamma_conv, &vConv, &delta_user, &delta_conv, &topicWords, &discourseWords, &backgroundWords, &typeSwitcher);
     delete[] W;
   }
 
@@ -389,20 +398,22 @@ public:
            double** beta_conv,
            double*** gamma_user,
            double*** gamma_conv,
+           double*** vConv,
            double*** delta_user,
            double*** delta_conv,
            double*** topicWords,
            double*** discourseWords,
            double** backgroundWords,
            double*** typeSwitcher,
-           bool init);
-  void clearG(double** alpha,
+           bool init) const;
+  static void clearG(double** alpha,
               double** kappa_disc,
               double** kappa_topic,
               double** beta_user,
               double** beta_conv,
               double*** gamma_user,
               double*** gamma_conv,
+              double*** vConv,
               double*** delta_user,
               double*** delta_conv,
               double*** topicWords,
@@ -428,6 +439,8 @@ public:
   double* beta_conv; // Item offset parameters
   double** gamma_user; // User latent factors
   double** gamma_conv; // Item latent factors
+  double** vConv;   // Conversations latent factors for extra information to characterize a user as a set of conversations.
+  double** yConv;   // Users latent factors for extra information to characterize a conversation as a set of participants.
   double** delta_user; // User latent discourse factors
   double** delta_conv; // Item latent discourse factors
 
@@ -436,7 +449,7 @@ public:
   double** typeSwitcher; // [D][3], weights in certain discourse for three kinds of words, 0 for backgroundword, 1 for discourse word, 2 for topic word
   double** topicWords; // Weights each word in each topic
   double** discourseWords; // Weights each word in each discourse
-  double* backgroundWords; // Weights each word in backgroundwords  
+  double* backgroundWords; // Weights each word in backgroundwords
   double* bg_topicWords;
   double* bg_discourseWords;
   // Latent variables
