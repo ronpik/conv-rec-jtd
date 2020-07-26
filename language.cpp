@@ -1050,7 +1050,7 @@ int main(int argc, char **argv) {
                    latentReg, // latent topic regularizer
                    lambda,  // lambda
                    c1, c2);
-    ec.train(80, 80);
+    ec.train(20, 80);
     ec.save(modelPath, resultPath, scorePath);
 
     return 0;
