@@ -259,6 +259,7 @@ public:
         printf(".");
         fflush( stdout);
       }
+
     }
 
     nRead = 0;
