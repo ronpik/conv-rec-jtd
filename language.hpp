@@ -110,6 +110,12 @@ public:
       W[i] = 0;
     getG(W, &alpha, &kappa_disc, &kappa_topic, &beta_user, &beta_conv, &gamma_user, &gamma_conv, &vConv, &delta_user, &delta_conv, &topicWords, &discourseWords, &backgroundWords, &typeSwitcher, true);
 
+      /* initialize users latent characterization matrix */
+      usersLatentConvBased = new double*[nUsers];
+      for (int u = 0; u < nUsers; u++) {
+          usersLatentConvBased[u] = new double[K];
+      }
+
     // Set alpha to the average
     int trainsize = (int) trainVotes.size();
     *alpha += (int) trainVotes.size();
@@ -293,6 +299,7 @@ public:
         for (int k = 0; k < K; k++) {
             gamma_conv[b][k] = rand() * 1.0 / RAND_MAX;
             vConv[b][k] = rand() * 1.0 / RAND_MAX;
+            printf("vConv[b][k]: %.19f\n", vConv[b][k]);
         }
         for (int d = 0; d < D; d++)
           delta_conv[b][d] = rand() * 1.0 / RAND_MAX;
@@ -356,6 +363,10 @@ public:
       delete[] msgWordtypes[*vi];
 
     clearG(&alpha, &kappa_disc, &kappa_topic, &beta_user, &beta_conv, &gamma_user, &gamma_conv, &vConv, &delta_user, &delta_conv, &topicWords, &discourseWords, &backgroundWords, &typeSwitcher);
+    for (int u = 0; u < nUsers; u++) {
+        delete[] usersLatentConvBased[u];
+    }
+    delete[] usersLatentConvBased;
     delete[] W;
   }
 
@@ -421,7 +432,9 @@ public:
               double** backgroundWords,
               double*** typeSwitcher);
 
-  double *characterizeUserByConversations(int user) const;
+    void characterizeUserByConversations(int user, double *user_latent) const;
+
+    void calculateConversationBasedUserCharacterization(double **users_latent) const;
 
   void wordtopicZ(double* res);
   void worddiscourseZ(double* res);
@@ -445,6 +458,10 @@ public:
   double** yConv;   // Users latent factors for extra information to characterize a conversation as a set of participants.
   double** delta_user; // User latent discourse factors
   double** delta_conv; // Item latent discourse factors
+
+  /* a matrix to store users characterizations based on latent conversation variables.
+   * re-computed at the beginning of every iteration */
+  double** usersLatentConvBased;
 
   double* W; // Contiguous version of all parameters, i.e., a flat vector containing all parameters in order (useful for lbfgs)
 

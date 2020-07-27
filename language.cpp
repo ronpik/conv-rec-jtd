@@ -196,38 +196,52 @@ static int progress(void *instance,
   return 0;
 }
 
-double* topicCorpus::characterizeUserByConversations(int user) const {
-    double* user_convs_mean = new double[K];
+/**
+ * calculate the latent variables for a user based on the conversations he has participated
+ * @param user the index of a user
+ * @param user_latent an array of size K (number of latent topics)
+ */
+void topicCorpus::characterizeUserByConversations(int user, double* user_latent) const {
     for (int k = 0; k < K; k++) {
-        user_convs_mean[k] = 0;
+        user_latent[k] = 0;
     }
-    for (int i = 0; i < (int) trainVotesPerUser[user].size(); i++) {
-        int convIndex = trainVotesPerUser[user][i] -> item;
+    for (vote* v : trainVotesPerUser[user]) {
+        int convIndex = v->item;
         double* convLatent = vConv[convIndex];
         for (int k = 0; k < K; k++) {
-            user_convs_mean[k] += convLatent[k];
+            user_latent[k] += convLatent[k];
         }
     }
     int numUserConversations = trainVotesPerUser[user].size();
-    for (int k = 0; k < K; k++) {
-        user_convs_mean[k] /= numUserConversations;
+    if (numUserConversations > 0) { // somehow there are users without any conversations (they are in the valid and in the test)
+        for (int k = 0; k < K; k++) {
+            user_latent[k] /= numUserConversations;
+        }
     }
-    return user_convs_mean;
+}
+
+/**
+ * calculates for all of the users their latent characterization based on conversations they have participated.
+ * @param users_latent a 2d array with dimensions U x K where U is the number of users and K is the number of latent topics.
+ */
+void topicCorpus::calculateConversationBasedUserCharacterization(double** users_latent) const {
+    for (int u = 0; u < nUsers; u++) {
+        characterizeUserByConversations(u, users_latent[u]);
+    }
 }
 
 /// Predict a particular rating given the current parameter values
 double topicCorpus::prediction(int user, int conv) {
     double res = *alpha + beta_user[user] + beta_conv[conv];
-    double* user_convs_mean = characterizeUserByConversations(user);
+    double* userLatnet = usersLatentConvBased[user];
     double topicValue = 0;
     for (int k = 0; k < K; k++) {
-        topicValue += gamma_conv[conv][k] * (gamma_user[user][k] + user_convs_mean[k]);
+        topicValue += gamma_conv[conv][k] * (gamma_user[user][k] + userLatnet[k]);
     }
     res += topicProportion * topicValue;
     for (int d = 0; d < D; d++) {
         res += (1 - topicProportion) * delta_user[user][d] * delta_conv[conv][d];
     }
-
     return res;
 }
 
@@ -236,7 +250,7 @@ void topicCorpus::topicZ(int conv, double& res)
 {
   res = 0;
   for (int k = 0; k < K; k++)
-    res += exp(*kappa_topic * gamma_conv[conv][k]);
+    res += exp(*kappa_topic * (gamma_conv[conv][k] + vConv[conv][k]));
 }
 
 /// Compute normalization constant for a particular user
@@ -332,7 +346,7 @@ void topicCorpus::msgSampling()
       // Sampling topic for this message
       double* topicScores = new double[K];
       for (int k = 0; k < K; k++)
-        topicScores[k] = exp(*kappa_topic * gamma_conv[cv][k]);
+        topicScores[k] = exp(*kappa_topic * (gamma_conv[cv][k] + vConv[cv][k]));
       int newTopic = sampleScores(topicScores, K);
       delete[] topicScores;
       int oldTopic = msgTopics[vi];
@@ -476,15 +490,28 @@ void topicCorpus::dl(double* grad)
     for (vector<vote*>::iterator it = trainVotesPerUser[u].begin(); it != trainVotesPerUser[u].end(); it ++)
     {
       vote* vi = *it;
-      double p1 = prediction(u, vi->item);
-      double dl1 = dsquare(p1 - RRATING) * confidence[u][vi->item];
+      int c = vi->item;
+      double p1 = prediction(u, c);
+      double dl1 = dsquare(p1 - RRATING) * confidence[u][c];
 
       da += dl1;
       dbeta_user[u] += dl1;
-      for (int k = 0; k < K; k++)
-        dgamma_user[u][k] += dl1 * topicProportion * gamma_conv[vi->item][k];
+      double* dvConv_update_values = new double[K]; // same values for all the current user characterization variables.
+      for (int k = 0; k < K; k++) {
+          dgamma_user[u][k] += dl1 * topicProportion * gamma_conv[c][k];
+          dvConv_update_values[k] = dl1 * topicProportion * gamma_conv[c][k] / trainVotesPerUser[u].size();
+      }
       for (int d = 0; d < D; d++)
-        ddelta_user[u][d] += dl1 * (1 - topicProportion) * delta_conv[vi->item][d];
+        ddelta_user[u][d] += dl1 * (1 - topicProportion) * delta_conv[c][d];
+
+      /* update conversation-based user characterization latent variables */
+      for (int i = 0; i < (int) trainVotesPerUser[u].size(); i++) {
+          int convIndex = trainVotesPerUser[u][i] -> item;
+          for (int k = 0; k < K; k++) {
+              dvConv[convIndex][k] += dvConv_update_values[k];
+          }
+      }
+      delete[] dvConv_update_values;
     }
   }
 
@@ -513,14 +540,16 @@ void topicCorpus::dl(double* grad)
     for (vector<vote*>::iterator it = trainVotesPerConv[b].begin(); it != trainVotesPerConv[b].end(); it ++)
     {
       vote* vi = *it;
-      double p1 = prediction(vi->user, b);
-      double dl1 = dsquare(p1 - RRATING) * confidence[vi->user][b];
+      int u = vi->user;
+      double p1 = prediction(u, b);
+      double dl1 = dsquare(p1 - RRATING) * confidence[u][b];
 
       dbeta_conv[b] += dl1;
+      double* userLatent = usersLatentConvBased[u];
       for (int k = 0; k < K; k++)
-        dgamma_conv[b][k] += dl1 * topicProportion * gamma_user[vi->user][k];
+        dgamma_conv[b][k] += dl1 * topicProportion * (gamma_user[u][k] + userLatent[k]);
       for (int d = 0; d < D; d++)
-        ddelta_conv[b][d] += dl1 * (1 - topicProportion) * delta_user[vi->user][d];
+        ddelta_conv[b][d] += dl1 * (1 - topicProportion) * delta_user[u][d];
     }
   }
 
@@ -534,8 +563,9 @@ void topicCorpus::dl(double* grad)
       double dl2 = dsquare(p2 - 0) * confidence[u][b];
 
       dbeta_conv[b] += dl2;
+      double* userLatent = usersLatentConvBased[u];
       for (int k = 0; k < K; k++)
-        dgamma_conv[b][k] += dl2 * topicProportion * gamma_user[u][k];
+        dgamma_conv[b][k] += dl2 * topicProportion * (gamma_user[u][k] + userLatent[k]);
       for (int d = 0; d < D; d++)
         ddelta_conv[b][d] += dl2 * (1 - topicProportion) * delta_user[u][d];
     }
@@ -550,9 +580,10 @@ void topicCorpus::dl(double* grad)
 
     for (int k = 0; k < K; k++)
     {
-      double q = -lambda * (convTopicCounts[b][k] - convTopicSums[b] * exp(*kappa_topic * gamma_conv[b][k]) / tZ);
+      double q = -lambda * (convTopicCounts[b][k] - convTopicSums[b] * exp(*kappa_topic * (gamma_conv[b][k] + vConv[b][k])) / tZ);
       dgamma_conv[b][k] += *kappa_topic * q;
-      dk += gamma_conv[b][k] * q;
+      dvConv[b][k] += *kappa_topic * q;
+      dk += (gamma_conv[b][k] + vConv[b][k]) * q;
     }
   }
   (*dkappa_topic) = dk;
@@ -631,8 +662,10 @@ void topicCorpus::dl(double* grad)
     }
     for (int b = 0; b < nConvs; b++)
     {
-      for (int k = 0; k < K; k++)
-        dgamma_conv[b][k] += latentReg * dsquare(gamma_conv[b][k]);
+      for (int k = 0; k < K; k++) {
+          dgamma_conv[b][k] += latentReg * dsquare(gamma_conv[b][k]);
+          dvConv[b][k] += latentReg * dsquare(vConv[b][k]);
+      }
       for (int d = 0; d < D; d++)
         ddelta_conv[b][d] += latentReg * dsquare(delta_conv[b][d]);
     }
@@ -669,14 +702,13 @@ double topicCorpus::lsq()
     for (int d = 0; d < D; d++)
       res += -lambda * userDiscourseCounts[u][d] * (*kappa_disc * delta_user[u][d] - ldZ);
   }
-
   for (int b = 0; b < nConvs; b++)
   {
     double tZ;
     topicZ(b, tZ);
     double ltZ = log(tZ);
     for (int k = 0; k < K; k++)
-      res += -lambda * convTopicCounts[b][k] * (*kappa_topic * gamma_conv[b][k] - ltZ);
+      res += -lambda * convTopicCounts[b][k] * (*kappa_topic * (gamma_conv[b][k] + vConv[b][k]) - ltZ);
   }
 
   double* wtZ = new double[K];
@@ -729,8 +761,10 @@ double topicCorpus::lsq()
     }
     for (int b = 0; b < nConvs; b++)
     {
-      for (int k = 0; k < K; k++)
-        res += latentReg * square(gamma_conv[b][k]);
+      for (int k = 0; k < K; k++) {
+          double v = square(gamma_conv[b][k]) + (2 * gamma_conv[b][k] * vConv[b][k]) + square(vConv[b][k]);
+          res += latentReg * v;
+      }
       for (int d = 0; d < D; d++)
         res += latentReg * square(delta_conv[b][d]);
     }
@@ -1067,9 +1101,11 @@ void topicCorpus::save(std::string modelPath, std::string resultPath, std::strin
 /// Train a model for "emIterations" with "gradIterations" of gradient descent at each step
 void topicCorpus::train(int emIterations, int gradIterations)
 {
+  std::cout << "start train" << std::endl;
   bestValidScore = -1;
   for (int emi = 0; emi < emIterations; emi++)
   {
+    calculateConversationBasedUserCharacterization(usersLatentConvBased);
     printf("\nIteration time: %d\n", emi+1);
     lbfgsfloatval_t fx = 0;
     lbfgsfloatval_t* x = lbfgs_malloc(NW);
@@ -1179,8 +1215,8 @@ int main(int argc, char** argv)
   topicCorpus ec(&corp, K, D, topicProportion, // K and D and topic proportion
                  latentReg, // latent topic regularizer
                  lambda,  // lambda
-                 c1, c2); 
-  ec.train(20, 80);
+                 c1, c2);
+  ec.train(1, 80);
   ec.save(modelPath, resultPath, scorePath);
 
   return 0;
