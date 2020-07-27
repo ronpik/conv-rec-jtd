@@ -104,6 +104,10 @@ public:
       uName = msgs[5];
       msgID = msgs[1];
       msgIDs[cName].push_back(msgID);
+
+      if (uName == "-1")
+        continue;
+
       splitString(msgs[4], words, " ");
       for (int w = 0; w < (int) words.size(); w++)
       {
@@ -200,6 +204,10 @@ public:
       cName = msgs[0];
       uName = msgs[5];
       msgID = msgs[1];
+
+      if (uName == "-1")
+        continue;
+
       splitString(msgs[4], words, " ");
       for (int w = 0; w < (int) words.size(); w++)
       {
