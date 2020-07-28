@@ -762,8 +762,10 @@ double topicCorpus::lsq()
     for (int b = 0; b < nConvs; b++)
     {
       for (int k = 0; k < K; k++) {
-          double v = square(gamma_conv[b][k]) + (2 * gamma_conv[b][k] * vConv[b][k]) + square(vConv[b][k]);
-          res += latentReg * v;
+//          double v = square(gamma_conv[b][k]) + (2 * gamma_conv[b][k] * vConv[b][k]) + square(vConv[b][k]);
+//          res += latentReg * v;
+        res += square(gamma_conv[b][k]);
+        res += square(vConv[b][k]);
       }
       for (int d = 0; d < D; d++)
         res += latentReg * square(delta_conv[b][d]);
