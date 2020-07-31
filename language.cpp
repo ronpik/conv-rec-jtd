@@ -789,6 +789,7 @@ void topicCorpus::meanAveragePrecision(double& train, double& valid, double& tes
             train += ap;
         }
     }
+    train /= totalNum;
 
   // Compute MAP of validation set
   totalNum = 0;
@@ -1201,7 +1202,7 @@ int main(int argc, char** argv)
                  lambda,  // lambda
                  c1, c2);
 
-  int numIterations = 20;
+  int numIterations = 40;
   learningSteps = new std::vector<LearningStep*>[numIterations];
 
   ec.train(numIterations, 80);
