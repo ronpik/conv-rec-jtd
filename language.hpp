@@ -111,8 +111,8 @@ public:
       trainsize += (int) trainNovotesPerUser[u].size();
     }
     *alpha /= trainsize;
-    double valid, test;
-    meanAveragePrecision(valid, test);
+    double train, valid, test;
+    meanAveragePrecision(train, valid, test);
     printf("MAP(offset term only) (valid/test) = %f/%f\n", valid, test);
   
     // Set beta to user and product offsets
@@ -132,7 +132,7 @@ public:
       beta_conv[b] -= *alpha * trainNovotesPerConv[b].size();
       beta_conv[b] /= (trainVotesPerConv[b].size() + trainNovotesPerConv[b].size());
     }
-    meanAveragePrecision(valid, test);
+    meanAveragePrecision(train, valid, test);
     printf("MAP(offset and bias) (valid/test) = %f/%f\n", valid, test);
 
     // Actually the model works better if we initialize none of these terms?
@@ -355,11 +355,11 @@ public:
   void dl(double* grad);
   void train(int emIterations, int gradIterations);
   double lsq(void);
-  void meanAveragePrecision(double& valid, double& test);
+  void meanAveragePrecision(double&  train, double& valid, double& test);
   double precisionAtN(map<int, vector<rating> > testRatings, int n);
   double nDCG(map<int, vector<rating> > testRatings, int k);
   void otherEvaluation(double* pnResult, double* ndcgResult, std::string scorePath);
-  void save(std::string modelPath, std::string resultPath, std::string scorePath);
+  void save(std::string modelPath, std::string resultPath, std::string scorePath, std::string learningPath);
 
   corpus* corp;
   
