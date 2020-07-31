@@ -25,6 +25,16 @@ inline double dsquare(double x)
   return 2 * x;
 }
 
+struct LearningStep {
+    double train;
+    double valid;
+    double test;
+};
+
+typedef struct LearningStep LearningStep;
+
+std::vector<LearningStep*> * learningSteps;
+
 /*
 double clock_()
 {
@@ -749,18 +759,41 @@ double averagePrecision(vector<rating> rankedRatings)
 }
 
 /// Compute evaluation part for conversation data ranking, MAP
-void topicCorpus::meanAveragePrecision(double& valid, double& test)
+void topicCorpus::meanAveragePrecision(double& train, double& valid, double& test)
 {
+  map<int, vector<rating> > trainRatings;
   map<int, vector<rating> > validRatings;
   map<int, vector<rating> > testRatings;
   double ap;
   int totalNum = 0;
+  train = 0;
   valid = 0;
   test = 0;
 
+    // Compute MAP of training set
+    for (vector<vote*>::iterator it = trainVotes.begin(); it != trainVotes.end(); it++) {
+        trainRatings[(*it)->user].push_back(rating(prediction((*it)->user, (*it)->item), RRATING));
+    }
+    for (int u = 0; u < nUsers; u++) {
+        for (vector<int>::iterator it = trainNovotesPerUser[u].begin(); it != trainNovotesPerUser[u].end(); it ++) {
+            int b = (*it);
+            trainRatings[u].push_back(rating(prediction(u, b), 0));
+        }
+    }
+    for (map<int, vector<rating> >::iterator it = trainRatings.begin(); it != trainRatings.end(); it++) {
+        sort(trainRatings[it->first].begin(), trainRatings[it->first].end(), comparison);
+        ap = averagePrecision(trainRatings[it->first]);
+        if (ap != -1)
+        {
+            totalNum++;
+            train += ap;
+        }
+    }
+    train /= totalNum;
+
   // Compute MAP of validation set
-  for (vector<vote*>::iterator it = validVotes.begin(); it != validVotes.end(); it++)
-  {
+  totalNum = 0;
+  for (vector<vote*>::iterator it = validVotes.begin(); it != validVotes.end(); it++) {
     validRatings[(*it)->user].push_back(rating(prediction((*it)->user, (*it)->item), RRATING));
   }
   for (int u = 0; u < nUsers; u++)
@@ -955,7 +988,7 @@ void topicCorpus::topWords()
 }
 
 /// Save a model and result to two files
-void topicCorpus::save(std::string modelPath, std::string resultPath, std::string scorePath)
+void topicCorpus::save(std::string modelPath, std::string resultPath, std::string scorePath, std::string learningPath)
 {
   FILE* f;
   getG(bestW, &(alpha), &(kappa_disc), &(kappa_topic), &(beta_user), &(beta_conv), &(gamma_user), &(gamma_conv), &(delta_user), &(delta_conv), &(topicWords), &(discourseWords), &(backgroundWords), &(typeSwitcher), false);
@@ -988,6 +1021,17 @@ void topicCorpus::save(std::string modelPath, std::string resultPath, std::strin
     }
     fclose(f);
   }
+
+  /*
+   * write the learning curve of the train, validation and test sets during training.
+   */
+  f = fopen_(learningPath.c_str(), "w");
+  for (vector<LearningStep*>::iterator it = learningSteps->begin(); it != learningSteps->end(); it ++) {
+      LearningStep* step = *it;
+      fprintf(f, "%.4f\t%.4f\t%.4f\n", step->train, step->valid, step->test);
+  }
+  fclose(f);
+
 
   double pnResult[4];
   double ndcgResult[4];
@@ -1058,9 +1102,15 @@ void topicCorpus::train(int emIterations, int gradIterations)
       topWords();
     }
 
-    double valid, test;
-    meanAveragePrecision(valid, test);
-    printf("\nMAP (valid/test) = %f/%f\n", valid, test);
+    double train, valid, test;
+    meanAveragePrecision(train, valid, test);
+    printf("\nMAP (valid/test) = %f / %f / %f\n", train, valid, test);
+
+    LearningStep* step = new LearningStep ();
+    step->train = train;
+    step->valid = valid;
+    step->test = test;
+    learningSteps->push_back(step);
 
     if (valid > bestValidScore)
     {
@@ -1094,6 +1144,7 @@ int main(int argc, char** argv)
   std::string modelPath;
   std::string resultPath;
   std::string scorePath;
+  std::string learningPath;
 
   if (argc >= 7)
   {
@@ -1115,6 +1166,7 @@ int main(int argc, char** argv)
     modelPath = argv[9];
     resultPath = argv[10];
     scorePath = argv[11];
+    learningPath = argv[12];
   }
   else
   {
@@ -1124,12 +1176,15 @@ int main(int argc, char** argv)
     modelPath = argv[1];
     resultPath = argv[1];
     scorePath = argv[1];
+    learningPath = argv[1];
     modelPath.append(s);
     resultPath.append(s);
     scorePath.append(s);
+    learningPath.append(s);
     modelPath.append("model.out");
     resultPath.append("result.out");
     scorePath.append("score.out");
+    learningPath.append("learning.out");
   }
 
   printf("corpus = %s\n", argv[1]);
@@ -1146,8 +1201,11 @@ int main(int argc, char** argv)
                  latentReg, // latent topic regularizer
                  lambda,  // lambda
                  c1, c2);
-  ec.train(80, 80);
-  ec.save(modelPath, resultPath, scorePath);
 
+  int numIterations = 40;
+  learningSteps = new std::vector<LearningStep*>[numIterations];
+
+  ec.train(numIterations, 80);
+  ec.save(modelPath, resultPath, scorePath, learningPath);
   return 0;
 }
