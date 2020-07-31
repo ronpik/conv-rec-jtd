@@ -1025,8 +1025,8 @@ void topicCorpus::save(std::string modelPath, std::string resultPath, std::strin
    * write the learning curve of the train, validation and test sets during training.
    */
   f = fopen_(learningPath.c_str(), "w");
-  for (auto it = learningSteps->begin(); it != learningSteps->end(); it ++) {
-      auto* step = *it;
+  for (vector<LearningStep*>::iterator it = learningSteps->begin(); it != learningSteps->end(); it ++) {
+      LearningStep* step = *it;
       fprintf(f, "%.4f\t%.4f\t%.4f\n", step->train, step->valid, step->test);
   }
   fclose(f);
@@ -1105,7 +1105,7 @@ void topicCorpus::train(int emIterations, int gradIterations)
     meanAveragePrecision(train, valid, test);
     printf("\nMAP (valid/test) = %f / %f / %f\n", train, valid, test);
 
-    auto* step = new LearningStep ();
+    LearningStep* step = new LearningStep ();
     step->train = train;
     step->valid = valid;
     step->test = test;
