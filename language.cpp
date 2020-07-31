@@ -1154,7 +1154,7 @@ int main(int argc, char** argv)
     exit(0);
   }
 
-  double latentReg = 0;
+  double latentReg = 0.3;
   double lambda = 0.1;
   double topicProportion = 0.5;
   int K = 10;
